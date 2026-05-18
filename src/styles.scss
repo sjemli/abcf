@@ -1,0 +1,68 @@
+@use '@foblex/flow/styles' as flow-theme;
+@include flow-theme.theme-tokens();
+@include flow-theme.flow-canvas();
+@include flow-theme.node-group();
+@include flow-theme.connector();
+@include flow-theme.connection-all();
+
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+
+/* ── CAAR / BNPP Paribas Design Tokens ── */
+:root {
+  --bnpp-green:        #009B77;
+  --bnpp-green-bright: #00c896;
+  --bnpp-green-deep:   #007a5e;
+  --bnpp-green-glow:   rgba(0,155,119,0.25);
+  --bnpp-green-faint:  rgba(0,155,119,0.08);
+  --bnpp-green-dim:    rgba(0,155,119,0.12);
+
+  --bg-base:    #0b0f18;
+  --bg-surface: #0d1120;
+  --bg-raised:  #111827;
+  --bg-card:    #131c2e;
+  --bg-hover:   rgba(255,255,255,0.03);
+
+  --border:       rgba(0,155,119,0.12);
+  --border-soft:  rgba(255,255,255,0.06);
+  --border-mid:   rgba(255,255,255,0.1);
+
+  --text-primary:   #e8e6e1;
+  --text-secondary: #7a9186;
+  --text-muted:     #3a5a4e;
+  --text-dim:       #1e3a2e;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: rgba(0,155,119,0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,155,119,0.35); }
+
+/* Foblex theme */
+f-flow {
+  --f-connection-color: rgba(0,155,119,0.3);
+  --f-connection-selected-color: #009B77;
+  --f-canvas-background-color: #090d14;
+  --f-canvas-dot-color: rgba(0,155,119,0.12);
+}
+
+::selection { background: rgba(0,155,119,0.3); }
+
+button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--bnpp-green);
+  outline-offset: 2px;
+}
+
+

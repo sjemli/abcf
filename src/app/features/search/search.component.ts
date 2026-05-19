@@ -6,30 +6,30 @@ import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { PartyService, SearchField } from '../../core/services/party.service';
 import { SearchResult } from '../../core/models/party.model';
-
+ 
 interface FieldOption {
   key: SearchField;
   label: string;
   placeholder: string;
   hint: string;
   examples: string[];
-  icon: string; // inline SVG path data
+  icon: string;
 }
-
+ 
 @Component({
   selector: 'app-search',
   standalone: true,
   imports: [FormsModule, CommonModule],
   template: `
     <div class="page">
-
+ 
       <!-- ══ Header ══ -->
       <header class="hdr">
         <div class="hdr-inner">
           <div class="eyebrow"><span class="edot"></span>Counterparty &amp; Account Registry</div>
           <h1 class="title">Find a Party</h1>
           <p class="sub">Select a search field, enter your query and hit Search</p>
-
+ 
           <!-- ── Field selector ── -->
           <div class="field-tabs">
             @for (f of fields; track f.key) {
@@ -45,7 +45,7 @@ interface FieldOption {
               </button>
             }
           </div>
-
+ 
           <!-- ── Search bar ── -->
           <div class="sbar-wrap">
             <svg class="sico" width="15" height="15" viewBox="0 0 24 24"
@@ -75,7 +75,7 @@ interface FieldOption {
               Search
             </button>
           </div>
-
+ 
           <!-- ── Field hint + examples ── -->
           <div class="field-hint">
             <span class="hint-text">{{ activeHint() }}</span>
@@ -87,16 +87,22 @@ interface FieldOption {
           </div>
         </div>
       </header>
-
+ 
       <!-- ══ Results area ══ -->
       <div class="body">
-
+ 
         @if (loading()) {
           <div class="state">
             <div class="spin"></div>
-            <span>Searching by <strong>{{ activeLabel() }}</strong>…</span>
+            <span>
+              @if (isDefaultLoad() && !query.trim()) {
+                Loading all parties…
+              } @else {
+                Searching by <strong>{{ activeLabel() }}</strong>…
+              }
+            </span>
           </div>
-
+ 
         } @else if (error()) {
           <div class="state err">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -107,7 +113,7 @@ interface FieldOption {
             </svg>
             {{ error() }}
           </div>
-
+ 
         } @else if (searched() && results().length === 0) {
           <div class="state no-results">
             <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
@@ -123,19 +129,21 @@ interface FieldOption {
               </div>
             </div>
           </div>
-
+ 
         } @else if (results().length > 0) {
           <div class="res-hdr">
             <div class="res-meta">
               <span class="res-count">{{ total() }} result{{ total() !== 1 ? 's' : '' }}</span>
-              <span class="res-q">— {{ activeLabel() }} contains "{{ lastQuery() }}"</span>
+              <span class="res-q">
+                {{ isDefaultLoad() && !lastQuery() ? '— all parties' : '— ' + activeLabel() + ' contains "' + lastQuery() + '"' }}
+              </span>
             </div>
             <span class="src-badge" [class.live]="!isMock()">
               <span class="src-dot"></span>
               {{ isMock() ? 'Mock data' : 'Live API' }}
             </span>
           </div>
-
+ 
           <div class="tbl-wrap">
             <table class="tbl">
               <thead>
@@ -215,7 +223,7 @@ interface FieldOption {
               </tbody>
             </table>
           </div>
-
+ 
           @if (total() > pageSize) {
             <div class="pager">
               <button [disabled]="page() === 1" (click)="go(page() - 1)">← Prev</button>
@@ -223,9 +231,9 @@ interface FieldOption {
               <button [disabled]="page() === pages()" (click)="go(page() + 1)">Next →</button>
             </div>
           }
-
+ 
         } @else {
-          <!-- ── Empty / welcome state ── -->
+          <!-- ── Empty / welcome state (only if not yet initialised) ── -->
           <div class="welcome">
             <div class="w-cards">
               @for (f of fields; track f.key) {
@@ -257,13 +265,38 @@ interface FieldOption {
             </p>
           </div>
         }
-
+ 
       </div>
+ 
+      <!-- ══ Backend unreachable popup ══ -->
+      @if (backendUnreachable()) {
+        <div class="popup-overlay" (click)="backendUnreachable.set(false)">
+          <div class="popup" (click)="$event.stopPropagation()">
+            <div class="popup-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+            <div class="popup-body">
+              <p class="popup-title">Backend Unreachable</p>
+              <p class="popup-sub">
+                Could not connect to the party registry API.<br>
+                Showing cached mock data in the meantime.
+              </p>
+            </div>
+            <button class="popup-close" (click)="backendUnreachable.set(false)">Dismiss</button>
+          </div>
+        </div>
+      }
+ 
     </div>
   `,
   styles: [`
     .page { min-height: 100vh; background: var(--bg-base); display: flex; flex-direction: column; }
-
+ 
     /* ── Header ── */
     .hdr {
       background: var(--bg-surface);
@@ -276,7 +309,7 @@ interface FieldOption {
       background: linear-gradient(90deg, var(--green), transparent);
     }
     .hdr-inner { max-width: 820px; }
-
+ 
     .eyebrow {
       display: flex; align-items: center; gap: 7px;
       font-size: 10px; color: var(--green);
@@ -288,7 +321,7 @@ interface FieldOption {
     }
     .title { font-size: 26px; font-weight: 800; color: #f1f0eb; letter-spacing: -0.025em; margin-bottom: 3px; }
     .sub   { font-size: 12px; color: var(--text-dim); margin-bottom: 18px; }
-
+ 
     /* Field tabs */
     .field-tabs {
       display: flex; gap: 6px; margin-bottom: 14px;
@@ -310,7 +343,7 @@ interface FieldOption {
       border-bottom-color: var(--green);
     }
     .ftab svg { flex-shrink: 0; }
-
+ 
     /* Search bar */
     .sbar-wrap {
       display: flex; align-items: center; gap: 0;
@@ -352,7 +385,7 @@ interface FieldOption {
     }
     .search-btn:hover:not(:disabled) { opacity: 0.88; }
     .search-btn:disabled { opacity: 0.35; cursor: default; }
-
+ 
     /* Field hint */
     .field-hint {
       display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
@@ -367,10 +400,10 @@ interface FieldOption {
       cursor: pointer; font-family: inherit; transition: all 0.15s;
     }
     .ex-chip:hover { background: var(--green-dim); border-color: var(--green-border); color: var(--green); }
-
+ 
     /* Body */
     .body { flex: 1; padding: 22px 40px; }
-
+ 
     /* States */
     .state {
       display: flex; align-items: center; gap: 14px;
@@ -382,14 +415,14 @@ interface FieldOption {
     .no-title { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
     .no-sub   { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
     .no-sub strong { color: var(--text-secondary); }
-
+ 
     .spin {
       width: 18px; height: 18px; flex-shrink: 0;
       border: 2px solid var(--green-faint); border-top-color: var(--green);
       border-radius: 50%; animation: spin 0.7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-
+ 
     /* Results header */
     .res-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
     .res-meta { display: flex; align-items: center; gap: 8px; }
@@ -405,7 +438,7 @@ interface FieldOption {
       background: rgba(59,130,246,0.07); border-color: rgba(59,130,246,0.2); color: #60a5fa;
     }
     .src-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-
+ 
     /* Table */
     .tbl-wrap { overflow-x: auto; }
     .tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -421,7 +454,7 @@ interface FieldOption {
     }
     .row:hover { background: rgba(0,155,119,0.03); }
     .tbl td { padding: 10px 11px; vertical-align: middle; }
-
+ 
     .name-cell { display: flex; align-items: center; gap: 9px; }
     .av {
       width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0;
@@ -433,18 +466,18 @@ interface FieldOption {
     .av-firm    { background: rgba(59,130,246,0.08); color: #60a5fa; border: 1px solid rgba(59,130,246,0.2); }
     .av-client  { background: rgba(168,85,247,0.08); color: #c084fc; border: 1px solid rgba(168,85,247,0.2); }
     .av-default { background: var(--border-soft); color: #9ca3af; border: 1px solid var(--border-mid); }
-
+ 
     .pname { font-weight: 600; color: var(--text-primary); }
     .pname.highlighted,
     .mono.highlighted  { color: var(--green-bright); }
-
+ 
     .tbadge { font-size: 10px; padding: 2px 7px; border-radius: 3px; font-weight: 500; }
     .tb-market  { background: var(--green-faint); border: 1px solid var(--green-border); color: var(--green); }
     .tb-ccp     { background: rgba(245,158,11,0.07); border: 1px solid rgba(245,158,11,0.2); color: #f59e0b; }
     .tb-firm    { background: rgba(59,130,246,0.07); border: 1px solid rgba(59,130,246,0.2); color: #60a5fa; }
     .tb-client  { background: rgba(168,85,247,0.07); border: 1px solid rgba(168,85,247,0.2); color: #c084fc; }
     .tb-default { background: var(--border-soft); border: 1px solid var(--border-mid); color: #9ca3af; }
-
+ 
     .mono {
       font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted);
     }
@@ -482,7 +515,7 @@ interface FieldOption {
       transition: all 0.15s;
     }
     .view-btn:hover { background: var(--green-faint); border-color: var(--green); }
-
+ 
     .pager {
       display: flex; align-items: center; gap: 14px;
       padding: 18px 0; color: var(--text-muted); font-size: 12px;
@@ -493,7 +526,7 @@ interface FieldOption {
       cursor: pointer; font-family: inherit; font-size: 11px;
     }
     .pager button:disabled { opacity: 0.3; cursor: default; }
-
+ 
     /* ── Welcome state ── */
     .welcome { padding: 28px 0; }
     .w-cards {
@@ -522,7 +555,7 @@ interface FieldOption {
     .w-label { font-size: 14px; font-weight: 700; color: var(--text-primary); }
     .w-hint  { font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-bottom: 12px; }
     .w-examples { display: flex; flex-wrap: wrap; gap: 5px; }
-
+ 
     .w-tip {
       font-size: 12px; color: var(--text-dim); max-width: 480px; line-height: 1.6;
     }
@@ -532,31 +565,81 @@ interface FieldOption {
       border-radius: 4px; font-family: 'JetBrains Mono', monospace;
     }
     .w-tip strong { color: var(--text-secondary); }
+ 
+    /* ── Backend unreachable popup ── */
+    .popup-overlay {
+      position: fixed; inset: 0; z-index: 999;
+      background: rgba(0,0,0,0.45);
+      display: flex; align-items: flex-end; justify-content: center;
+      padding-bottom: 36px;
+      animation: fadeIn 0.15s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+ 
+    .popup {
+      background: var(--bg-surface);
+      border: 1px solid rgba(248,113,113,0.3);
+      border-radius: 14px;
+      padding: 20px 24px;
+      display: flex; align-items: center; gap: 16px;
+      max-width: 480px; width: 100%;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      animation: slideUp 0.2s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(16px); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+ 
+    .popup-icon {
+      flex-shrink: 0; color: #f87171;
+      width: 40px; height: 40px; border-radius: 10px;
+      background: rgba(248,113,113,0.08);
+      border: 1px solid rgba(248,113,113,0.2);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .popup-body { flex: 1; }
+    .popup-title {
+      font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 3px;
+    }
+    .popup-sub {
+      font-size: 12px; color: var(--text-muted); line-height: 1.6;
+    }
+    .popup-close {
+      flex-shrink: 0;
+      background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.25);
+      color: #f87171; padding: 6px 14px; border-radius: 7px;
+      cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 500;
+      transition: background 0.15s;
+    }
+    .popup-close:hover { background: rgba(248,113,113,0.16); }
   `],
 })
 export class SearchComponent implements OnInit, OnDestroy {
   private svc    = inject(PartyService);
   private router = inject(Router);
   private route  = inject(ActivatedRoute);
-
-  // State
-  query   = '';
+ 
+  // ── State ──
+  query    = '';
   pageSize = 20;
-
-  field    = signal<SearchField>('name');
-  results  = signal<SearchResult[]>([]);
-  total    = signal(0);
-  page     = signal(1);
-  loading  = signal(false);
-  error    = signal<string | null>(null);
-  isMock   = signal(false);
-  searched = signal(false);        // has user triggered at least one search?
-  lastQuery = signal('');
-
+ 
+  field             = signal<SearchField>('name');
+  results           = signal<SearchResult[]>([]);
+  total             = signal(0);
+  page              = signal(1);
+  loading           = signal(false);
+  error             = signal<string | null>(null);
+  isMock            = signal(false);
+  searched          = signal(false);
+  lastQuery         = signal('');
+  isDefaultLoad     = signal(false);
+  backendUnreachable = signal(false);
+ 
   private search$ = new Subject<{ q: string; f: SearchField }>();
   private sub!: Subscription;
-
-  // Field definitions
+ 
+  // ── Field definitions ──
   readonly fields: FieldOption[] = [
     {
       key: 'name',
@@ -583,18 +666,23 @@ export class SearchComponent implements OnInit, OnDestroy {
       icon: '<path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2z"/><path d="M7 7h.01"/>',
     },
   ];
-
+ 
   ngOnInit() {
-    // Restore from URL
+    // Restore from URL query params
     const q = this.route.snapshot.queryParamMap.get('q') ?? '';
     const f = (this.route.snapshot.queryParamMap.get('field') ?? 'name') as SearchField;
+ 
     if (q) {
+      // URL has an active search — restore it
       this.query = q;
       this.field.set(f);
       this.run(q, f, 1);
+    } else {
+      // No active search — load all parties (mocks first, then live)
+      this.loadAll(1);
     }
-
-    // Debounced auto-search (only fires after 350ms of no typing)
+ 
+    // Debounced auto-search pipeline (only used when user is typing a search query)
     this.sub = this.search$
       .pipe(
         debounceTime(350),
@@ -618,31 +706,74 @@ export class SearchComponent implements OnInit, OnDestroy {
         },
       });
   }
-
+ 
   ngOnDestroy() { this.sub?.unsubscribe(); }
-
+ 
+  /**
+   * Load all parties:
+   *  1. Show mocks immediately (sync, no spinner)
+   *  2. Fire real API call in background
+   *  3. On success → silently swap results to live data
+   *  4. On failure → keep mocks, show "Backend Unreachable" popup
+   */
+  loadAll(p: number) {
+    this.error.set(null);
+    this.isDefaultLoad.set(true);
+    this.searched.set(true);
+    this.backendUnreachable.set(false);
+    this.page.set(p);
+ 
+    // ── Step 1: render mocks instantly ──
+    const mockPage = this.svc.getMockParties(p, this.pageSize);
+    this.results.set(mockPage.data);
+    this.total.set(mockPage.total);
+    this.isMock.set(true);
+    this.loading.set(false); // no spinner — data is already visible
+ 
+    // ── Step 2: attempt live API in background ──
+    this.svc.getAll(p, this.pageSize).subscribe({
+      next: res => {
+        this.results.set(res.data);
+        this.total.set(res.total);
+        this.isMock.set(false);
+        this.backendUnreachable.set(false);
+      },
+      error: () => {
+        // Keep mock data visible, notify user
+        this.backendUnreachable.set(true);
+      },
+    });
+  }
+ 
   /** Called on every keystroke – auto-searches after debounce */
   onType(q: string) {
     this.page.set(1);
-    if (!q.trim()) { this.results.set([]); this.total.set(0); this.searched.set(false); return; }
+    this.isDefaultLoad.set(false);
+    if (!q.trim()) {
+      // User cleared the input — go back to default all-parties view
+      this.loadAll(1);
+      return;
+    }
     this.search$.next({ q: q.trim(), f: this.field() });
   }
-
+ 
   /** Explicit submit (Enter / Search button) – fires immediately */
   submit() {
     const q = this.query.trim();
     if (!q) return;
+    this.isDefaultLoad.set(false);
     this.page.set(1);
     this.run(q, this.field(), 1);
   }
-
+ 
   run(q: string, f: SearchField, p: number) {
     this.loading.set(true);
     this.error.set(null);
     this.lastQuery.set(q);
     this.searched.set(true);
+    this.isDefaultLoad.set(false);
     this.router.navigate([], { queryParams: { q, field: f }, replaceUrl: true });
-
+ 
     this.svc.search(q, f, p, this.pageSize).subscribe({
       next: res => {
         this.results.set(res.data);
@@ -656,37 +787,45 @@ export class SearchComponent implements OnInit, OnDestroy {
       },
     });
   }
-
+ 
   setField(f: SearchField) {
     this.field.set(f);
-    // Re-run if there's an active query
     if (this.query.trim()) {
       this.page.set(1);
       this.run(this.query.trim(), f, 1);
     }
   }
-
+ 
+  /** Clear search → return to default all-parties view */
   clear() {
     this.query = '';
-    this.results.set([]); this.total.set(0);
-    this.searched.set(false);
+    this.lastQuery.set('');
     this.router.navigate([], { queryParams: {}, replaceUrl: true });
+    this.loadAll(1);
   }
-
+ 
   use(v: string) {
     this.query = v;
     this.submit();
   }
-
+ 
   goto(id: string) {
     this.router.navigate(['/party', id], {
       queryParams: { q: this.lastQuery(), field: this.field() },
     });
   }
-
-  go(p: number) { this.page.set(p); this.run(this.query.trim(), this.field(), p); }
+ 
+  go(p: number) {
+    this.page.set(p);
+    if (this.isDefaultLoad() && !this.query.trim()) {
+      this.loadAll(p);
+    } else {
+      this.run(this.query.trim(), this.field(), p);
+    }
+  }
+ 
   pages() { return Math.ceil(this.total() / this.pageSize) || 1; }
-
+ 
   activePlaceholder(): string {
     return this.fields.find(f => f.key === this.field())?.placeholder ?? '';
   }
@@ -699,7 +838,7 @@ export class SearchComponent implements OnInit, OnDestroy {
   activeLabel(): string {
     return this.fields.find(f => f.key === this.field())?.label ?? '';
   }
-
+ 
   tier(type: string): string {
     const t = (type ?? '').toLowerCase();
     if (t === 'market') return 'market';
@@ -709,3 +848,4 @@ export class SearchComponent implements OnInit, OnDestroy {
     return 'default';
   }
 }
+ 
